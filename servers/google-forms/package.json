@@ -1,6 +1,6 @@
 {
   "name": "@vessl-ai/google-forms-mcp-server",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "MCP server for Google Forms.",
   "author": "Kyle <kyle@vessl.ai>",
   "license": "MIT",
@@ -11,6 +11,9 @@
   "homepage": "https://github.com/vessl-ai/mcp-servers/tree/main/servers/google-forms#readme",
   "bugs": {
     "url": "https://github.com/vessl-ai/mcp-servers/issues"
+  },
+  "bin": {
+    "google-forms-mcp-server": "dist/index.js"
   },
   "keywords": [
     "nestjs",
