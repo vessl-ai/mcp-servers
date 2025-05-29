@@ -1,6 +1,6 @@
 {
   "name": "@vessl-ai/google-forms-mcp-server",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "MCP server for Google Forms.",
   "author": "Kyle <kyle@vessl.ai>",
   "license": "MIT",
@@ -13,7 +13,8 @@
     "url": "https://github.com/vessl-ai/mcp-servers/issues"
   },
   "bin": {
-    "google-forms-mcp-server": "dist/index.js"
+    "@vessl-ai/google-forms-mcp-server": "dist/main.js",
+    "google-forms-mcp-server": "dist/main.js"
   },
   "keywords": [
     "nestjs",
@@ -25,7 +26,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "nest build && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+    "build": "nest build && node -e \"require('fs').chmodSync('dist/main.js', '755')\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -37,7 +38,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "inspector": "npx @modelcontextprotocol/inspector dist/index.js"
+    "inspector": "npx @modelcontextprotocol/inspector dist/main.js",
+    "prepublish": "pnpm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
