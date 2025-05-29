@@ -18,6 +18,9 @@
     "mcp",
     "integration"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "nest build && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
