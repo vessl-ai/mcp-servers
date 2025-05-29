@@ -8,6 +8,7 @@ export class AuthController {
   @Get('callback')
   async callback(@Query('code') code: string, @Query('scope') scope: string[]) {
     console.log('Callback received', code, scope);
-    return this.googleFormsTool.authCallback(code);
+    await this.googleFormsTool.authCallback(code);
+    return 'Success! Go back to your client.';
   }
 }
