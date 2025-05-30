@@ -1,14 +1,19 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { GoogleFormsTool } from './google-forms.tool';
+import { AuthService } from './auth.service';
 
 @Controller('oauth2')
 export class AuthController {
-  constructor(private readonly googleFormsTool: GoogleFormsTool) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Get('callback')
-  async callback(@Query('code') code: string, @Query('scope') scope: string[]) {
-    console.log('Callback received', code, scope);
-    await this.googleFormsTool.authCallback(code);
+  async callback(
+    @Query('code') code: string,
+    @Query('scope') scope: string[],
+    @Query('state') state: string,
+  ) {
+    const sessionId = state;
+    console.log('Callback received', code, scope, state);
+    await this.authService.handleOauth2Callback(code, sessionId);
     return 'Success! Go back to your client.';
   }
 }

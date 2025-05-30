@@ -4,45 +4,45 @@ import { Context, Tool } from '@rekog/mcp-nest';
 import { OAuth2Client } from 'google-auth-library';
 import { drive_v3, forms_v1, google } from 'googleapis';
 import { z } from 'zod';
+import { AuthService } from './auth.service';
 
 @Injectable()
 export class GoogleFormsTool {
-  private formsClient: forms_v1.Forms;
-  private driveClient: drive_v3.Drive;
-  private authClient: OAuth2Client;
-  private logger = new Logger(GoogleFormsTool.name);
-  constructor(private readonly configService: ConfigService) {
-    const clientId = this.configService.get<string>('google.clientId');
-    const clientSecret = this.configService.get<string>('google.clientSecret');
-    const redirectUri = this.configService.get('app.oauth2CallbackUrl');
-    this.authClient = new OAuth2Client(clientId, clientSecret, redirectUri);
-    this.formsClient = google.forms({ version: 'v1', auth: this.authClient });
-    this.driveClient = google.drive({ version: 'v3', auth: this.authClient });
+  private formsClient(authClient: OAuth2Client): forms_v1.Forms {
+    return google.forms({ version: 'v1', auth: authClient });
   }
+  private driveClient(authClient: OAuth2Client): drive_v3.Drive {
+    return google.drive({ version: 'v3', auth: authClient });
+  }
+  private logger = new Logger(GoogleFormsTool.name);
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Tool({
     name: 'startOauth2',
     description: 'Start OAuth2 authentication',
   })
-  startOauth2(
+  async startOauth2(
     params: any,
     context: Context,
     request: Request,
-  ): {
+  ): Promise<{
     content: any[];
-  } {
+  }> {
+    const sessionId = request['sessionId'];
+    if (sessionId) {
+      this.logger.log(`Session ID: ${sessionId}`);
+    }
     this.logger.log('Starting OAuth2 authentication');
     const redirectUri = this.configService.get('app.oauth2CallbackUrl');
 
     this.logger.log(`Redirect URI: ${redirectUri}`);
-    const authUrl = this.authClient.generateAuthUrl({
-      access_type: 'offline',
-      scope: [
-        'https://www.googleapis.com/auth/forms.body',
-        'https://www.googleapis.com/auth/drive.file',
-      ],
-      redirect_uri: redirectUri,
-    });
+    const authUrl = await this.authService.initiateOauth2(sessionId, [
+      'https://www.googleapis.com/auth/forms.body',
+      'https://www.googleapis.com/auth/drive.file',
+    ]);
     return {
       content: [
         {
@@ -53,36 +53,47 @@ export class GoogleFormsTool {
     };
   }
 
-  async authCallback(code: string) {
-    const token = await this.authClient.getToken(code);
-    this.authClient.setCredentials(token.tokens);
-  }
-
   // Create a new Google Form
   @Tool({
     name: 'createForm',
     description: 'Create a new Google Form, ',
     parameters: z.object({
-      form: z
-        .string()
-        .describe(
-          'JSON string of the form to create - https://developers.google.com/workspace/forms/api/reference/rest/v1/forms#Info',
-        ),
+      info: z.object({
+        title: z.string(),
+        description: z.string().optional(),
+        documentTitle: z.string().optional(),
+      }),
+      items: z.array(z.any()).optional(),
+      settings: z.any().optional(),
+      revisionId: z.string().optional(),
+      responderUri: z.string().optional(),
+      linkedSheetId: z.string().optional(),
+      formId: z.string().optional(),
     }),
   })
-  async createForm(form: string): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
+  async createForm(
+    form: forms_v1.Schema$Form,
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
 
-    // Why is this API so convoluted? Just let me create a form!
-    const request = JSON.parse(form);
-    const res = await this.formsClient.forms.create({
-      requestBody: request,
+    const { info, items, settings } = form;
+    this.logger.log(`Creating form with info: ${JSON.stringify(info)}`);
+    this.logger.log(`Creating form with items: ${JSON.stringify(items)}`);
+    this.logger.log(`Creating form with settings: ${JSON.stringify(settings)}`);
+    const res = await this.formsClient(authClient).forms.create({
+      requestBody: {
+        info: {
+          title: info?.title,
+          description: info?.description,
+          documentTitle: info?.documentTitle,
+        },
+        items: items,
+        settings: settings,
+      },
     });
     return {
       content: [
@@ -101,14 +112,14 @@ export class GoogleFormsTool {
       formId: z.string(),
     }),
   })
-  async deleteForm(formId: string): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
+  async deleteForm(
+    formId: string,
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
     throw new Error(
       'Google Forms API does NOT support deleting forms. Go yell at Google.',
     );
@@ -121,15 +132,15 @@ export class GoogleFormsTool {
       formId: z.string(),
     }),
   })
-  async publishForm(formId: string): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
-    const res = await this.formsClient.forms.setPublishSettings({
+  async publishForm(
+    { formId }: { formId: string },
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
+    const res = await this.formsClient(authClient).forms.setPublishSettings({
       formId,
       requestBody: {
         publishSettings: {
@@ -157,15 +168,15 @@ export class GoogleFormsTool {
       formId: z.string(),
     }),
   })
-  async getForm(formId: string): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
-    const res = await this.formsClient.forms.get({ formId });
+  async getForm(
+    { formId }: { formId: string },
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
+    const res = await this.formsClient(authClient).forms.get({ formId });
     return {
       content: [
         {
@@ -180,17 +191,18 @@ export class GoogleFormsTool {
     name: 'listMyForms',
     description: 'List all Google Forms owned by the authenticated user',
   })
-  async listMyForms(): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
-    const res = await this.driveClient.files.list({
-      q: "mimeType='application/vnd.google-apps.form' and trashed=false",
-      fields: 'files(id, name, createdTime, modifiedTime, owners)',
+  async listMyForms(
+    params: any,
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
+    const res = await this.driveClient(authClient).files.list({
+      q: "mimeType='application/vnd.google-apps.form'",
+      fields:
+        'nextPageToken, files(id, name, createdTime, modifiedTime, owners)',
       spaces: 'drive',
     });
     return {
@@ -211,15 +223,15 @@ export class GoogleFormsTool {
       responseId: z.string(),
     }),
   })
-  async getFormResponses(formId: string, responseId: string): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
-    const res = await this.formsClient.forms.responses.get({
+  async getFormResponses(
+    { formId, responseId }: { formId: string; responseId: string },
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
+    const res = await this.formsClient(authClient).forms.responses.get({
       formId,
       responseId,
     });
@@ -239,15 +251,17 @@ export class GoogleFormsTool {
       formId: z.string(),
     }),
   })
-  async listFormResponses(formId: string): Promise<any> {
-    try {
-      await this.authClient.getAccessToken();
-    } catch (error) {
-      throw new Error(
-        'Not authenticated. Please start OAuth2 authentication first.',
-      );
-    }
-    const res = await this.formsClient.forms.responses.list({ formId });
+  async listFormResponses(
+    { formId }: { formId: string },
+    context: Context,
+    request: Request,
+  ): Promise<any> {
+    const authClient = await this.authService.getAuthClient(
+      request['sessionId'],
+    );
+    const res = await this.formsClient(authClient).forms.responses.list({
+      formId,
+    });
     return {
       content: [
         {
