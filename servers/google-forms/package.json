@@ -1,6 +1,6 @@
 {
   "name": "@vessl-ai/google-forms-mcp-server",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "MCP server for Google Forms.",
   "author": "Kyle <kyle@vessl.ai>",
   "license": "MIT",
